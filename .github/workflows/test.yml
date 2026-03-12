@@ -20,5 +20,9 @@ jobs:
         with:
           go-version-file: .go-version
 
-      - name: Run tests
-        run: go test -count=1 -timeout=20m ./api/... ./nomad/structs/... ./scheduler/...
+      - name: Test api module
+        run: go test -count=1 -timeout=20m ./...
+        working-directory: api
+
+      - name: Test structs and scheduler
+        run: go test -count=1 -timeout=20m ./nomad/structs/... ./scheduler/...
