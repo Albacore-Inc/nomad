@@ -1,0 +1,81 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build linux/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .go-version
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install cross-compiler for arm64
+        if: matrix.goarch == 'arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install go-bindata tools
+        run: |
+          go install github.com/go-bindata/go-bindata/v3/go-bindata@latest
+          go install github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs@latest
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Ember UI
+        run: make ember-dist
+
+      - name: Generate static assets
+        run: make static-assets
+
+      - name: Build package
+        run: make pkg/linux_${{ matrix.goarch }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nomad-linux-${{ matrix.goarch }}
+          path: pkg/linux_${{ matrix.goarch }}.zip
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect zip files
+        run: |
+          mkdir release
+          find artifacts -name '*.zip' -exec cp {} release/ \;
+          ls -la release/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
