@@ -1899,7 +1899,7 @@ func (c *Client) registerAndHeartbeat() {
 		if err := c.updateNodeStatus(); err != nil {
 			// The servers have changed such that this node has not been
 			// registered before
-			if strings.Contains(err.Error(), "node not found") {
+			if strings.Contains(err.Error(), "node not found") || strings.Contains(err.Error(), "Permission denied") {
 				// Re-register the node
 				c.logger.Info("re-registering node")
 				c.retryRegisterNode()
